@@ -67,8 +67,8 @@ movie-catalog/
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/venflaxine/TechnologiiSetevogoVzaikmodeystviya.git
-cd TechnologiiSetevogoVzaikmodeystviya
+git clone https://github.com/venflaxine/SiteAboutFilms
+cd SiteAboutFilms
 ```
 
 ### 2. Настройка переменных окружения
@@ -142,16 +142,4 @@ TMDB предоставляет информацию о фильмах, вклю
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
 
-## Разработка
 
-Для внесения изменений в проект:
-
-```bash
-git add .
-git commit -m "Описание изменений"
-git push origin main
-```
-
----
-
-**Movie Catalog** — личная система управления коллекцией фильмов.

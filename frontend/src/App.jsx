@@ -41,7 +41,11 @@ function App() {
 
   const [error, setError] = useState('');
   const [summaryError, setSummaryError] = useState('');
-
+  const [tmdbQuery, setTmdbQuery] = useState('');
+  const [tmdbResults, setTmdbResults] = useState([]);
+  const [tmdbLoading, setTmdbLoading] = useState(false);
+  const [tmdbError, setTmdbError] = useState('');
+  const [addingTmdbId, setAddingTmdbId] = useState(null);
   // Универсальная обработка ответов основного API
   async function apiRequest(url, options = {}) {
     const response = await fetch(`${API_URL}${url}`, {
@@ -251,6 +255,71 @@ function App() {
     }
   }
 
+async function searchTmdb(event) {
+  event.preventDefault();
+
+  if (tmdbQuery.trim().length < 2) return;
+
+  try {
+    setTmdbLoading(true);
+    setTmdbError('');
+    setTmdbResults([]);
+
+    const data = await apiRequest(
+      `/tmdb/search?query=${encodeURIComponent(tmdbQuery.trim())}`
+    );
+
+    setTmdbResults(data.results || []);
+
+    if (!data.results?.length) {
+      setTmdbError('Ничего не найдено.');
+    }
+  } catch (err) {
+    setTmdbError(err.message);
+  } finally {
+    setTmdbLoading(false);
+  }
+}
+
+async function addTmdbMovie(movie) {
+  if (!movie.year) {
+    setTmdbError('У фильма не указана дата выхода, его нельзя добавить.');
+    return;
+  }
+
+  if (movies.some(existing => existing.tmdb_id === movie.id)) {
+    setTmdbError('Этот фильм уже есть в твоей коллекции.');
+    return;
+  }
+
+  try {
+    setAddingTmdbId(movie.id);
+    setTmdbError('');
+
+    await apiRequest('/movies', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: movie.title,
+        year: movie.year,
+        description: movie.description,
+        genres: movie.genres,
+        watched: false,
+        rating: null,
+        tmdb_id: movie.id,
+        poster_path: movie.poster_path,
+        tmdb_rating: movie.tmdb_rating,
+        original_title: movie.original_title
+      })
+    });
+
+    await refreshData();
+  } catch (err) {
+    setTmdbError(err.message);
+  } finally {
+    setAddingTmdbId(null);
+  }
+}
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -382,6 +451,103 @@ function App() {
             </div>
           </div>
 
+<section className="tmdb-search">
+  <div className="tmdb-heading">
+    <div>
+      <span className="eyebrow">ВНЕШНЯЯ БАЗА ФИЛЬМОВ</span>
+      <h2>Найти фильм в TMDB</h2>
+      <p>Поиск по мировой базе фильмов</p>
+    </div>
+  </div>
+
+  <form className="tmdb-search-form" onSubmit={searchTmdb}>
+    <input
+      value={tmdbQuery}
+      onChange={e => setTmdbQuery(e.target.value)}
+      placeholder="Например, Интерстеллар..."
+    />
+
+    <button
+      type="submit"
+      disabled={tmdbLoading || tmdbQuery.trim().length < 2}
+    >
+      {tmdbLoading ? 'Ищем...' : 'Найти фильм'}
+    </button>
+  </form>
+
+  {tmdbError && (
+    <div className="tmdb-error">{tmdbError}</div>
+  )}
+
+  {tmdbResults.length > 0 && (
+    <div className="tmdb-results">
+      {tmdbResults.map(movie => {
+        const alreadyAdded = movies.some(
+          existing => existing.tmdb_id === movie.id
+        );
+
+        return (
+          <article className="tmdb-result" key={movie.id}>
+            <div className="tmdb-result-poster">
+              {movie.poster_path ? (
+                <img
+                  src={`https://image.tmdb.org/t/p/w342${movie.poster_path}`}
+                  alt={movie.title}
+                />
+              ) : (
+                <span>Нет постера</span>
+              )}
+            </div>
+
+            <div className="tmdb-result-info">
+              <h3>{movie.title}</h3>
+
+              <div>
+                {movie.year || 'Год неизвестен'}
+                {' · '}
+                {movie.genres.join(', ')}
+              </div>
+
+              <p>
+                {movie.description || 'Описание отсутствует.'}
+              </p>
+
+              <span>
+                Рейтинг TMDB: {Number(movie.tmdb_rating || 0).toFixed(1)} / 10
+              </span>
+
+              <button
+                type="button"
+                disabled={
+                  alreadyAdded ||
+                  !movie.year ||
+                  addingTmdbId === movie.id
+                }
+                onClick={() => addTmdbMovie(movie)}
+              >
+                {alreadyAdded
+                  ? 'Уже в коллекции'
+                  : addingTmdbId === movie.id
+                    ? 'Добавляем...'
+                    : 'Добавить в коллекцию'}
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  )}
+
+  <div className="tmdb-attribution">
+    <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer">
+      TMDB
+    </a>
+    <span>
+      This product uses the TMDB API but is not endorsed or certified by TMDB.
+    </span>
+  </div>
+</section>
+
           <div className="section-heading">
             <div>
               <h2>Фильмы</h2>
@@ -439,12 +605,22 @@ function App() {
                 {filteredMovies.map(movie => (
                   <article className="movie-card" key={movie._id}>
                     <div className="poster custom">
-                      <span className="poster-symbol">✦</span>
-                      <span className="poster-year">{movie.year}</span>
-                      <span className="poster-title">{movie.title}</span>
-                      <span className="poster-caption">
-                        MOVIE COLLECTION
-                      </span>
+                      {movie.poster_path ? (
+                        <img
+                          className="poster-image"
+                          src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
+                          alt={movie.title}
+                        />
+                      ) : (
+                        <>
+                          <span className="poster-symbol">✦</span>
+                          <span className="poster-year">{movie.year}</span>
+                          <span className="poster-title">{movie.title}</span>
+                          <span className="poster-caption">
+                            MOVIE COLLECTION
+                          </span>
+                        </>
+                      )}
 
                       {movie.watched && (
                         <span className="watched-badge">
